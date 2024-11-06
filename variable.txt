@@ -1,0 +1,8 @@
+export PSQL_HOST="36.50.54.204"
+export PSQL_PORT=5432
+export PSQL_USER="postgres"
+export PSQL_PASS="1"
+
+export BACKEND_HOST="0.0.0.0"
+export BACKEND_PORT=9947
+export BACKEND_YAML="config/analyzers.yaml"
