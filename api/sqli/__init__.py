@@ -2,7 +2,7 @@ from flask import Blueprint, request
 from json import loads
 from .operation import sqli_operation_blueprint
 from ..sql import psql_cursor
-from ..functions import get_value_from_json, parse_path, is_valid_regex, re, traverse_json
+from ..functions import get_value_from_json, parse_path, is_valid_regex, re, traverse_json, execute_action
 
 
 sqli_main_blueprint = Blueprint(name='sqli_main_blueprint', import_name=__name__)
@@ -98,6 +98,27 @@ def sqli_analyzer_endpoint(rule_name: str):
                         break
                 if flag:
                     break
+            if result is not None:
+                if action_id is not None:
+                    psql_cursor.execute(f'SELECT * FROM action WHERE id = {action_id};')
+                    action = psql_cursor.fetchone()
+                    if execute_action(action_type=action[2], action_configuration=loads(action[3]), virtual_variable_list={
+                        'id': row[0],
+                        'rule_name': row[1],
+                        'is_enabled': row[2],
+                        'target_field': row[3],
+                        'target_value': all_fields,
+                        'ip_root_cause_field': row[4],
+                        'ip_root_cause_value': ip_root_cause_field_value,
+                        'regex_matcher': row[5],
+                        'rule_library': row[6],
+                        'action': action[1],
+                        'result': result
+                    }, default_body=result) is False:
+                        error_logs.append({
+                            'message': 'Action perform fail with some reasons',
+                            'pattern': action[3]
+                        })
             return {
                 'type': 'sqli_analyzer',
                 'data': result,
@@ -129,6 +150,27 @@ def sqli_analyzer_endpoint(rule_name: str):
                             'ip_root_cause': ip_root_cause_field_value
                         }
                         break
+                if result is not None:
+                    if action_id is not None:
+                        psql_cursor.execute(f'SELECT * FROM action WHERE id = {action_id};')
+                        action = psql_cursor.fetchone()
+                        if execute_action(action_type=action[2], action_configuration=loads(action[3]), virtual_variable_list={
+                            'id': row[0],
+                            'rule_name': row[1],
+                            'is_enabled': row[2],
+                            'target_field': row[3],
+                            'target_value': json_value_str,
+                            'ip_root_cause_field': row[4],
+                            'ip_root_cause_value': ip_root_cause_field_value,
+                            'regex_matcher': row[5],
+                            'rule_library': row[6],
+                            'action': action[1],
+                            'result': result
+                        }, default_body=result) is False:
+                            error_logs.append({
+                                'message': 'Action perform fail with some reasons',
+                                'pattern': action[3]
+                            })
                 return {
                     'type': 'sqli_analyzer',
                     'data': result,
@@ -144,6 +186,12 @@ def sqli_analyzer_endpoint(rule_name: str):
                     'pattern': f'{target_field}'
                 })
         elif str(type(target_field_path)) == "<class 'list'>":
+            target_field_value = []
+            for path in target_field_path:
+                path_value = get_value_from_json(data=json, path=path)
+                target_field_value.append({
+                    path: path_value
+                })
             for path in target_field_path:
                 json_value = get_value_from_json(data=json, path=path)
                 if json_value is not None:
@@ -158,6 +206,27 @@ def sqli_analyzer_endpoint(rule_name: str):
                                 'ip_root_cause': ip_root_cause_field_value
                             }
                             break
+                    if result is not None:
+                        if action_id is not None:
+                            psql_cursor.execute(f'SELECT * FROM action WHERE id = {action_id};')
+                            action = psql_cursor.fetchone()
+                            if execute_action(action_type=action[2], action_configuration=loads(action[3]), virtual_variable_list={
+                                'id': row[0],
+                                'rule_name': row[1],
+                                'is_enabled': row[2],
+                                'target_field': row[3],
+                                'target_value': target_field_value,
+                                'ip_root_cause_field': row[4],
+                                'ip_root_cause_value': ip_root_cause_field_value,
+                                'regex_matcher': row[5],
+                                'rule_library': row[6],
+                                'action': action[1],
+                                'result': result
+                            }, default_body=result) is False:
+                                error_logs.append({
+                                    'message': 'Action perform fail with some reasons',
+                                    'pattern': action[3]
+                                })
                     return {
                         'type': 'sqli_analyzer',
                         'data': result,

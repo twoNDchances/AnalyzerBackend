@@ -1,4 +1,5 @@
 import re
+import requests
 
 
 def get_value_from_json(data, path: str):
@@ -58,3 +59,63 @@ def traverse_json(data, parent_key='') -> list[dict]:
         paths.append({parent_key: data})
     return paths
 
+
+def replace_variables(user_input, variables):
+    def replacer(match):
+        var_name = match.group(1)
+        return str(variables.get(var_name, f"${{{var_name}}}"))
+    result = re.sub(r"\$([a-zA-Z_][a-zA-Z0-9_]*)", replacer, user_input)
+    return result
+
+
+def execute_action(action_type: str, action_configuration: dict, virtual_variable_list: dict, default_body: dict):
+    if action_type == 'webhook':
+        url = action_configuration.get('url')
+        method = action_configuration.get('method')
+        type = action_configuration.get('type')
+        if not all([url, method, type]):
+            return False
+        if str(method).lower() not in ['get', 'post', 'put', 'patch', 'delete']:
+            return False
+        if type not in ['default', 'custom']:
+            return False
+        body = action_configuration.get('body')
+        final_body = None
+        if type == 'default':
+            final_body = default_body
+        if type == 'custom':
+            if not body or not isinstance(body, dict):
+                return False
+            final_body = replace_variables(user_input=str(body), variables=virtual_variable_list)
+        try:
+            if str(method).upper() == 'GET':
+                response = requests.get(url=url, headers={"Content-Type": "application/json"}, json=final_body)
+                if response.status_code != 200:
+                    return False
+                return True
+            if str(method).upper() == 'POST':
+                response = requests.post(url=url, headers={"Content-Type": "application/json"}, json=final_body)
+                if response.status_code != 200:
+                    return False
+                return True
+            if str(method).upper() == 'PUT':
+                response = requests.put(url=url, headers={"Content-Type": "application/json"}, json=final_body)
+                if response.status_code != 200:
+                    return False
+                return True
+            if str(method).upper() == 'PATCH':
+                response = requests.patch(url=url, headers={"Content-Type": "application/json"}, json=final_body)
+                if response.status_code != 200:
+                    return False
+                return True
+            if str(method).upper() == 'DELETE':
+                response = requests.delete(url=url, headers={"Content-Type": "application/json"}, json=final_body)
+                if response.status_code != 200:
+                    return False
+                return True
+            return False
+        except:
+            return False
+    if action_type == 'email':
+        return True
+    return False

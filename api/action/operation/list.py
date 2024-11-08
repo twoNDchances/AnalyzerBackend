@@ -19,6 +19,7 @@ class ActionList(Resource):
                 'data': [row[1] for row in rows],
                 'reason': 'Success'
             }
+        print(rows)
         return jsonify({
             'type': 'action',
             'data': [{
