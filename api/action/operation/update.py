@@ -1,27 +1,25 @@
 from flask import request
 from flask_restful import Resource
-from json import loads, dumps
+from json import dumps, loads
 from requests import get
 from ...sql import psql_cursor
 
 
-class ActionCreate(Resource):
-    def post(self, kind):
-        if kind is None:
+class ActionUpdate(Resource):
+    def put(self, id):
+        if id is None:
             return {
                 'type': 'action',
                 'data': None,
-                'reason': 'Action Kind required'
+                'reason': 'ID is required'
             }, 400
-        action_list = [
-            'webhook',
-            'email'
-        ]
-        if kind not in action_list:
+        psql_cursor.execute(f"SELECT * FROM action WHERE id = {id};")
+        action = psql_cursor.fetchone()
+        if action is None:
             return {
                 'type': 'action',
                 'data': None,
-                'reason': 'Action Kind not found'
+                'reason': 'NotFound'
             }, 404
         try:
             loads(request.data)
@@ -34,7 +32,7 @@ class ActionCreate(Resource):
         request_body = dict(request.get_json())
 
         action_name = request_body.get("actionName")
-        action_configuration = request_body.get("actionConfiguration")
+        action_configuration = loads(request_body.get("actionConfiguration"))
 
         if not all([action_name, action_configuration]):
             return {
@@ -42,21 +40,13 @@ class ActionCreate(Resource):
                 'data': None,
                 'reason': 'Missing required fields'
             }, 400
-        psql_cursor.execute(f"SELECT action_name FROM action WHERE action_name = '{action_name}';")
-        action = psql_cursor.fetchone()
-        if action is not None:
-            return {
-                'type': 'action',
-                'data': None,
-                'reason': 'Action Name is exist'
-            }, 406
         if not isinstance(action_configuration, dict):
             return {
                 'type': 'action',
                 'data': None,
                 'reason': 'Invalid configuration format'
             }, 400
-        if kind == 'webhook':
+        if action[2] == 'webhook':
             url = action_configuration.get("url")
             type = action_configuration.get("type")
             method = action_configuration.get('method')
@@ -119,28 +109,41 @@ class ActionCreate(Resource):
                     'data': None,
                     'reason': "GET request to webhook for testing fail"
                 }, 500
-            psql_cursor.execute(
-                """
-                INSERT INTO action (action_name, action_type, action_configuration)
-                VALUES (%s, 'webhook', %s);
-                """,
-                (action_name, dumps(action_configuration))
-            )
+        if action[2] == 'email':
             return {
                 'type': 'action',
                 'data': None,
                 'reason': 'Success'
             }
-        if kind == 'email':
-            return {
-                'type': 'action',
-                'data': None,
-                'reason': 'Success'
-            }
+        old_action_name = action[1]
+        old_action_configuration = action[3]
+        action_name_flag = False
+        action_configuration_flag = False
+        if old_action_name != action_name:
+            psql_cursor.execute(f"SELECT action_name FROM action WHERE action_name = '{action_name}';")
+            result = psql_cursor.fetchone()
+            if result is not None:
+                return {
+                    'type': 'action',
+                    'data': None,
+                    'reason': 'Action Name is exist'
+                }, 406
+            old_action_name = action_name
+            action_name_flag = True
+        if old_action_configuration != action_configuration:
+            old_action_configuration = action_configuration
+            action_configuration_flag = True
+        if action_name_flag is True or action_configuration_flag is True:
+            psql_cursor.execute(f'''
+                UPDATE action SET action_name = %s, action_configuration = %s WHERE id = {id};
+            ''', (old_action_name, dumps(old_action_configuration)))
         return {
             'type': 'action',
-            'data': None,
-            'reason': "Action Kind not found"
-        }, 404
-
-
+            'data': {
+                'id': action[0],
+                'action_name': old_action_name,
+                'action_type': action[2],
+                'action_configuration': old_action_configuration
+            },
+            'reason': 'Success'
+        }
